@@ -47,7 +47,7 @@ class VMMCommunicator:
                 return # 连接成功，直接返回
             except (FileNotFoundError, ConnectionRefusedError) as e:
                 # 文件还没生成，或者生成了但对方还没开始 listen
-                time.sleep(1) # 等待 1 秒再试
+                time.sleep(1)
                 continue
         
         # 如果重试多次失败，抛出异常
@@ -55,8 +55,7 @@ class VMMCommunicator:
 
 # ---------------- API 实现 (保持不变) ----------------
 def torch_mysend(tensor, dest_rank, comm: VMMCommunicator):
-    # ... (代码同上，无需修改) ...
-    # 为了完整性，这里简略写出，实际运行请保留之前的完整逻辑
+    # 获取实际 FD (从临时文件读取)
     fd_file = f"/tmp/vmm_fd_rank_{comm.rank}"
     
     # 增加一个简单的等待，确保 FD 文件已生成
@@ -100,13 +99,12 @@ def torch_myrecv(src_rank, comm: VMMCommunicator):
     # 获取物理大小
     alloc_size = metadata.get('phy_size', 1024 * 1024 * 128) 
     
-    # [修改点] 调用 C++ 扩展
-    # 我们增加了第四个参数：src_rank (即 resident_device_id)
+    # 参数：src_rank (即 resident_device_id)
     new_tensor = vmm_ipc.import_tensor_from_fd(
         fd, 
         alloc_size, 
         torch.cuda.current_device(), # 参数3: mapping_device_id (当前 Rank 1)
-        src_rank,                    # 参数4: resident_device_id (数据源 Rank 0) <--- 这里插入 src_rank
+        src_rank,                    # 参数4: resident_device_id (数据源 Rank 0)k
         metadata['shape'],           # 参数5
         metadata['dtype']            # 参数6
     )
