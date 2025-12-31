@@ -62,27 +62,15 @@ cudaError_t cudaMalloc(void** devPtr, size_t size) {
     CHECK_CU(cuMemMap(d_ptr, padded_size, 0, handle, 0));
 
     // ==========================================
-    // [关键修改] 4. 设置访问权限 (Set Access)
-    // 遍历所有 GPU，尝试开启访问权限。
-    // 这样 Rank 0 也能写入 Rank 1 分配的 local_buff。
+    // 4. 设置访问权限 (Set Access)
     // ==========================================
-    int device_count = 0;
-    cudaGetDeviceCount(&device_count);
+    CUmemAccessDesc accessDesc = {};
+    accessDesc.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
+    accessDesc.location.id = current_device; // 这里的 current_device 是 cudaGetDevice 拿到的
+    accessDesc.flags = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
 
-    for (int i = 0; i < device_count; ++i) {
-        CUmemAccessDesc desc = {};
-        desc.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
-        desc.location.id = i; // 尝试给第 i 个设备授权
-        desc.flags = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
-        
-        // 尝试设置权限
-        CUresult res = cuMemSetAccess(d_ptr, padded_size, &desc, 1);
-        
-        // 如果是当前设备，必须成功；如果是其他设备(P2P)，失败了可以容忍(可能是硬件不支持)
-        if (i == current_device) {
-            CHECK_CU(res);
-        }
-    }
+    // 当前分配者可以读写， 其他 GPU 如果想访问，必须走 IPC 流程在它们自己的页表中设置
+    CHECK_CU(cuMemSetAccess(d_ptr, padded_size, &accessDesc, 1));
 
     // 5. 导出 FD
     int fd = -1;

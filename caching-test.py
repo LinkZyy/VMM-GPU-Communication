@@ -38,7 +38,7 @@ def run_sender(rank, comm):
     # 此时显存被 PyTorch 占着，但里面没数据
     
     print(f"[Sender] 3. Allocating SMALL tensors from the cached block...")
-    # PyTorch 应该会复用刚才那 20GB 的空间
+    # PyTorch 会复用刚才那 20GB 的空间
     t1 = torch.ones(SMALL_TENSOR_SIZE, dtype=torch.uint8, device='cuda') # 占前面 100MB
     t2 = torch.full((SMALL_TENSOR_SIZE,), 2, dtype=torch.uint8, device='cuda') # 占后面 100MB
     
@@ -49,9 +49,11 @@ def run_sender(rank, comm):
     print(f"[Sender] -> t2 allocated at {hex(t2_ptr)}")
     print(f"[Sender] -> Offset from base: {offset} bytes ({offset/1024/1024} MB)")
     
+    # 如果特殊情况下 PyTorch 决定重新申请，则测试终止！
     if offset < 0 or offset > HUGE_BLOCK_SIZE:
         print("\033[91m[WARNING] PyTorch did NOT reuse the block! Test invalid.\033[0m")
-        # 这可能发生，如果 PyTorch 决定重新申请。但在空载 GPU 上通常会复用。
+        exit(-1)
+        
 
     # 发送 t2
     # 注意：我们要传的是 base_fd (大块的句柄) 和 offset (小块的位置)

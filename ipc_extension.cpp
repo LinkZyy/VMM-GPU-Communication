@@ -33,7 +33,7 @@ void nop_deleter(void* ptr) {
 // ------------------------------------------------------------------
 torch::Tensor import_tensor_from_fd(int fd, 
                                     int64_t phy_size,       // 物理块的总大小 (e.g. 20GB)
-                                    int64_t offset,         // <--- [关键新增] 字节偏移量
+                                    int64_t offset,         // 字节偏移量
                                     int mapping_device_id,  // 当前设备 (Rank 1)
                                     int resident_device_id, // 数据源设备 (Rank 0)
                                     std::vector<int64_t> shape, 
