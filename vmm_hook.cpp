@@ -88,11 +88,12 @@ cudaError_t cudaMalloc(void** devPtr, size_t size) {
     int fd = -1;
     CHECK_CU(cuMemExportToShareableHandle(&fd, handle, CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR, 0));
 
-    // 6. 记录
+    // 6. 记录 [同时写入 FD 和 Base Address]
     {
         std::lock_guard<std::mutex> lock(g_mutex);
         g_allocations[(void*)d_ptr] = {handle, padded_size, fd};
     }
+
     // 7. 输出 FD 到文件，供外部使用
     const char* rank_str = getenv("LOCAL_RANK");
     std::string filename;
@@ -100,7 +101,11 @@ cudaError_t cudaMalloc(void** devPtr, size_t size) {
     else filename = "/tmp/vmm_fd_pid_" + std::to_string(getpid());
     
     FILE* fp = fopen(filename.c_str(), "w");
-    if (fp) { fprintf(fp, "%d", fd); fclose(fp); }
+    if (fp) { 
+        // 格式: "FD BaseAddr_Long"
+        fprintf(fp, "%d %lu", fd, (uintptr_t)d_ptr); 
+        fclose(fp); 
+    }
 
     std::cout << "\n[VMM_HOOK] >>> Intercepted cudaMalloc(" << size << ")" << std::endl;
     // ...
